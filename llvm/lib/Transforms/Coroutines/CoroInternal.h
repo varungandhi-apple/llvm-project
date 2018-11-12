@@ -118,6 +118,7 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   };
 
   struct RetconLoweringStorage {
+    Optional<GlobalPtrAuthInfo> ResumePtrAuthInfo;
     Function *ResumePrototype;
     Function *Alloc;
     Function *Dealloc;
@@ -152,8 +153,18 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
 
   PointerType *getSwitchResumePointerType() const {
     assert(ABI == coro::ABI::Switch);
-  assert(FrameTy && "frame type not assigned");
-  return cast<PointerType>(FrameTy->getElementType(SwitchFieldIndex::Resume));
+    assert(FrameTy && "frame type not assigned");
+    return cast<PointerType>(FrameTy->getElementType(SwitchFieldIndex::Resume));
+  }
+
+  Optional<GlobalPtrAuthInfo> getResumePtrAuthInfo() const {
+    switch (ABI) {
+    case coro::ABI::Switch:
+      return None;
+    case coro::ABI::Retcon:
+    case coro::ABI::RetconOnce:
+      return RetconLowering.ResumePtrAuthInfo;
+    }
   }
 
   FunctionType *getResumeFunctionType() const {
@@ -231,7 +242,6 @@ struct LLVM_LIBRARY_VISIBILITY Shape {
   /// \param CG - if non-null, will be updated for the new call
   void emitDealloc(IRBuilder<> &Builder, Value *Ptr, CallGraph *CG) const;
 
-  Shape() = default;
   explicit Shape(Function &F) { buildFrom(F); }
   void buildFrom(Function &F);
 };

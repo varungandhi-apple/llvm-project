@@ -382,10 +382,20 @@ void coro::Shape::buildFrom(Function &F) {
                   : coro::ABI::RetconOnce);
     auto Prototype = ContinuationId->getPrototype();
     this->RetconLowering.ResumePrototype = Prototype;
+    this->RetconLowering.ResumePtrAuthInfo = ContinuationId->getPtrAuthInfo();
     this->RetconLowering.Alloc = ContinuationId->getAllocFunction();
     this->RetconLowering.Dealloc = ContinuationId->getDeallocFunction();
     this->RetconLowering.ReturnBlock = nullptr;
     this->RetconLowering.IsFrameInlineInStorage = false;
+
+    if (RetconLowering.ResumePtrAuthInfo &&
+        RetconLowering.ResumePtrAuthInfo->hasAddressDiversity()) {
+#ifndef NDEBUG
+      RetconLowering.ResumePtrAuthInfo->getGV()->dump();
+#endif
+      report_fatal_error("ptrauth-signed prototype must not have address "
+                         "diversity");
+    }
 
     // Determine the result value types, and make sure they match up with
     // the values passed to the suspends.
@@ -553,6 +563,9 @@ static void fail(const Instruction *I, const char *Reason, Value *V) {
 /// Check that the given value is a well-formed prototype for the
 /// llvm.coro.id.retcon.* intrinsics.
 static void checkWFRetconPrototype(const AnyCoroIdRetconInst *I, Value *V) {
+  if (auto PtrAuth = GlobalPtrAuthInfo::analyze(V)) {
+    V = const_cast<Constant *>(PtrAuth->getPointer());
+  }
   auto F = dyn_cast<Function>(V->stripPointerCasts());
   if (!F)
     fail(I, "llvm.coro.id.retcon.* prototype not a Function", V);

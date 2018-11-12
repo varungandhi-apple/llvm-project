@@ -1323,9 +1323,16 @@ static void splitRetconCoroutine(Function &F, coro::Shape &Shape,
       Builder.CreateRet(RetV);
     }
 
+    // Sign the continuation value if requested.
+    Constant *ContinuationValue = Continuation;
+    if (auto PtrAuthInfo = Shape.getResumePtrAuthInfo()) {
+      ContinuationValue =
+          PtrAuthInfo->createWithSameSchema(*F.getParent(), ContinuationValue);
+    }
+
     // Branch to the return block.
     Branch->setSuccessor(0, ReturnBB);
-    ReturnPHIs[0]->addIncoming(Continuation, SuspendBB);
+    ReturnPHIs[0]->addIncoming(ContinuationValue, SuspendBB);
     size_t NextPHIIndex = 1;
     for (auto &VUse : Suspend->value_operands())
       ReturnPHIs[NextPHIIndex++]->addIncoming(&*VUse, SuspendBB);
