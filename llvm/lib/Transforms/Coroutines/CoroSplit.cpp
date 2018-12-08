@@ -660,6 +660,18 @@ void CoroCloner::create() {
   for (Argument &A : OrigF.args())
     VMap[&A] = UndefValue::get(A.getType());
 
+  switch (Shape.ABI) {
+  case coro::ABI::Retcon:
+  case coro::ABI::RetconOnce:
+    // In retcon coroutines, replace any remaining uses of the original
+    // storage value with the storage parameter.
+    VMap[Shape.getRetconCoroId()->getStorage()] = &*NewF->arg_begin();
+    break;
+
+  case coro::ABI::Switch:
+    break;
+  }
+
   SmallVector<ReturnInst *, 4> Returns;
 
   // Ignore attempts to change certain attributes of the function.
@@ -1211,6 +1223,48 @@ static void splitSwitchCoroutine(Function &F, coro::Shape &Shape,
   setCoroInfo(F, Shape, Clones);
 }
 
+/// Produced a signed pointer value with this same schema.  If the address
+/// is provided, and this schema uses address discrimination, use that
+/// address instead of the stored address discriminator.
+static Value *emitSignedPointer(IRBuilder<> &Builder,
+                                const GlobalPtrAuthInfo &Schema,
+                                Constant *ConstPointer,
+                                Value *Address) {
+  auto Module = Builder.GetInsertBlock()->getModule();
+  if (!Schema.hasAddressDiversity()) {
+    return Schema.createWithSameSchema(*Module, ConstPointer);
+  }
+
+  auto IntPtrTy = Schema.getAddrDiscriminator()->getType();
+
+  // Blend the provided address with the extra discriminator if the extra
+  // discriminator is non-zero.
+  Value *Discriminator = Builder.CreatePtrToInt(Address, IntPtrTy);
+  auto ExtraDiscriminator = const_cast<ConstantInt*>(Schema.getDiscriminator());
+  if (!ExtraDiscriminator->isNullValue()) {
+    auto Blend = Intrinsic::getDeclaration(Module, Intrinsic::ptrauth_blend,
+                                           { IntPtrTy });
+    Discriminator =
+      Builder.CreateCall(Blend, {Discriminator, ExtraDiscriminator});
+  }
+
+  // Sign the pointer with the discriminator.
+
+  // The intrinsic wants an integer.
+  Value *Pointer = Builder.CreatePtrToInt(ConstPointer, IntPtrTy);
+
+  // call i64 @llvm.ptrauth.sign.i64(i64 %pointer, i32 %key, i64 %discriminator)
+  auto Sign = Intrinsic::getDeclaration(Module, Intrinsic::ptrauth_sign,
+                                        { IntPtrTy });
+  auto Key = const_cast<ConstantInt*>(Schema.getKey());
+  Pointer = Builder.CreateCall(Sign, { Pointer, Key, Discriminator });
+
+  // Convert back to the original pointer type.
+  Pointer = Builder.CreateIntToPtr(Pointer, ConstPointer->getType());
+
+  return Pointer;
+}
+
 static void splitRetconCoroutine(Function &F, coro::Shape &Shape,
                                  SmallVectorImpl<Function *> &Clones) {
   assert(Shape.ABI == coro::ABI::Retcon ||
@@ -1324,10 +1378,15 @@ static void splitRetconCoroutine(Function &F, coro::Shape &Shape,
     }
 
     // Sign the continuation value if requested.
-    Constant *ContinuationValue = Continuation;
+    Value *ContinuationValue = Continuation;
     if (auto PtrAuthInfo = Shape.getResumePtrAuthInfo()) {
+      assert(!PtrAuthInfo->hasAddressDiversity() ||
+             PtrAuthInfo->hasSpecialAddressDiscriminator(
+               GlobalPtrAuthInfo::AddrDiscriminator_UseCoroStorage));
+      IRBuilder<> Builder(Branch);
       ContinuationValue =
-          PtrAuthInfo->createWithSameSchema(*F.getParent(), ContinuationValue);
+          emitSignedPointer(Builder, *PtrAuthInfo, Continuation,
+                            Id->getStorage());
     }
 
     // Branch to the return block.

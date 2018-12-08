@@ -389,7 +389,9 @@ void coro::Shape::buildFrom(Function &F) {
     this->RetconLowering.IsFrameInlineInStorage = false;
 
     if (RetconLowering.ResumePtrAuthInfo &&
-        RetconLowering.ResumePtrAuthInfo->hasAddressDiversity()) {
+        RetconLowering.ResumePtrAuthInfo->hasAddressDiversity() &&
+        !RetconLowering.ResumePtrAuthInfo->hasSpecialAddressDiscriminator(
+          GlobalPtrAuthInfo::AddrDiscriminator_UseCoroStorage)) {
 #ifndef NDEBUG
       RetconLowering.ResumePtrAuthInfo->getGV()->dump();
 #endif
