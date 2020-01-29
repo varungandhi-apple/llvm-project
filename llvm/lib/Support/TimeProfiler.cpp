@@ -135,7 +135,7 @@ struct TimeTraceProfiler {
     std::vector<NameAndCountAndDurationType> SortedTotals;
     SortedTotals.reserve(CountAndTotalPerName.size());
     for (const auto &E : CountAndTotalPerName)
-      SortedTotals.emplace_back(E.getKey(), E.getValue());
+      SortedTotals.emplace_back(std::string(E.getKey()), E.getValue());
 
     llvm::sort(SortedTotals.begin(), SortedTotals.end(),
                [](const NameAndCountAndDurationType &A,
