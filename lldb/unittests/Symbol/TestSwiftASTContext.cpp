@@ -122,7 +122,7 @@ TEST_F(TestSwiftASTContext, ResourceDir) {
     SmallString path = m_base_dir.str();
     path::append(path, dir);
     ASSERT_NO_ERROR(fs::create_directories(path));
-    abs_paths.push_back(path.str());
+    abs_paths.push_back(std::string(path.str()));
   }
 
   llvm::StringRef macosx_sdk = path::parent_path(abs_paths[3]);
@@ -152,7 +152,8 @@ TEST_F(TestSwiftASTContext, ResourceDir) {
     llvm::Triple target(triple_string);
     return SwiftASTContextTester::GetResourceDir(
         sdk_path, SwiftASTContextTester::GetSwiftStdlibOSDir(target, host),
-        swift_dir.str(), xcode_contents.str(), toolchain.str(), cl_tools.str());
+        std::string(swift_dir.str()), std::string(xcode_contents.str()),
+        std::string(toolchain.str()), std::string(cl_tools.str()));
   };
 
   EXPECT_EQ(GetResourceDir({"x86_64-apple-macosx10.14"}, macosx_sdk), tc_rdir);
@@ -173,13 +174,13 @@ TEST_F(TestSwiftASTContext, ResourceDir) {
   // Custom toolchain.
   toolchain = path::parent_path(
       path::parent_path(path::parent_path(path::parent_path(abs_paths[7]))));
-  std::string custom_tc = path::parent_path(abs_paths[7]);
+  std::string custom_tc(path::parent_path(abs_paths[7]));
   EXPECT_EQ(GetResourceDir("x86_64-apple-macosx", macosx_sdk), custom_tc);
 
   // CLTools.
   xcode_contents = "";
   toolchain = "";
-  std::string cl_tools_rd = path::parent_path(abs_paths[8]);
+  std::string cl_tools_rd(path::parent_path(abs_paths[8]));
   EXPECT_EQ(GetResourceDir("x86_64-apple-macosx", macosx_sdk), cl_tools_rd);
 
   // Local builds.

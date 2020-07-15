@@ -914,7 +914,7 @@ void IdentifierNamingCheck::checkMacro(SourceManager &SourceMgr,
                                  KindName.c_str(), Name.str().c_str()));
     }
   } else {
-    NamingCheckId ID(MI->getDefinitionLoc(), Name);
+    NamingCheckId ID(MI->getDefinitionLoc(), std::string(Name));
     NamingCheckFailure &Failure = NamingCheckFailures[ID];
     SourceRange Range(MacroNameTok.getLocation(), MacroNameTok.getEndLoc());
 
@@ -927,7 +927,7 @@ void IdentifierNamingCheck::checkMacro(SourceManager &SourceMgr,
 void IdentifierNamingCheck::expandMacro(const Token &MacroNameTok,
                                         const MacroInfo *MI) {
   StringRef Name = MacroNameTok.getIdentifierInfo()->getName();
-  NamingCheckId ID(MI->getDefinitionLoc(), Name);
+  NamingCheckId ID(MI->getDefinitionLoc(), std::string(Name));
 
   auto Failure = NamingCheckFailures.find(ID);
   if (Failure == NamingCheckFailures.end())
